@@ -22,6 +22,7 @@ import {
   agoText,
   newId,
   normalizeSchedule,
+  pendingState,
   renderReport,
   resolveSessionRoot,
   resolveStateDir,
@@ -141,6 +142,15 @@ check('agoText 说人话', () => {
   assert.equal(agoText(new Date(Date.now() - 5000)), '5 秒前');
   assert.match(agoText(new Date(Date.now() - 1800_000)), /分钟前/);
   assert.match(agoText(new Date(Date.now() - 7200_000)), /小时前/);
+});
+check('pendingState 能分辨「跑着/已完成/丢了」', () => {
+  const alive = (pid) => pid === 42;
+  assert.equal(pendingState(null, null, alive), 'none');
+  assert.equal(pendingState({ id: 'a', canceled: true }, null, alive), 'canceled');
+  assert.equal(pendingState({ id: 'a', helperPid: 42 }, null, alive), 'running');
+  // 重启刚完、报告已经写出来了，但 pending.json 还在：必须读成「已完成」，不能误报
+  assert.equal(pendingState({ id: 'a', helperPid: 7 }, { id: 'a', state: 'ok' }, alive), 'finished');
+  assert.equal(pendingState({ id: 'a', helperPid: 7 }, { id: 'b', state: 'ok' }, alive), 'lost');
 });
 check('路径落在 DSH_HOME 下', () => {
   const env = { DSH_HOME: join('C:', 'fake', 'home') };

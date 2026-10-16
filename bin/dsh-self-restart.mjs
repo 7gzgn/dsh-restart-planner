@@ -65,7 +65,11 @@ async function main() {
   const stateDir = typeof argv['state-dir'] === 'string' ? argv['state-dir'] : resolveStateDir();
   const sessionRoot = typeof argv['session-root'] === 'string' ? argv['session-root'] : resolveSessionRoot();
   const callerPid = argv['caller-pid'] === undefined ? undefined : num(argv['caller-pid'], 0);
-  const common = { stateDir, sessionRoot, callerPid };
+  // 端口体检：显式给了就用，否则用环境里的 DSH_WEB_URL（从 DSH 终端里跑时自动就有）
+  const healthUrl = typeof argv['health-url'] === 'string'
+    ? argv['health-url']
+    : (typeof process.env.DSH_WEB_URL === 'string' && process.env.DSH_WEB_URL !== '' ? process.env.DSH_WEB_URL : undefined);
+  const common = { stateDir, sessionRoot, callerPid, healthUrl };
 
   if (command === 'status' || command === 'resolve') {
     if (command === 'resolve') {

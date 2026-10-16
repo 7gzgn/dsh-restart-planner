@@ -238,8 +238,12 @@ if (isWindows) {
     relaunchedPid = report.newPid;
     assert.ok(Number.isFinite(relaunchedPid) && relaunchedPid > 0, '应该记录了新进程 pid');
     await waitFor('新实例真的活着', () => isAlive(relaunchedPid), 15000);
-    assert.ok(typeof report.downtimeMs === 'number' && report.downtimeMs >= 0, '应该有停机时长');
-    process.stdout.write(`       （新实例 ${relaunchedPid}；停机 ${(report.downtimeMs / 1000).toFixed(1)}s；killList ${report.killList.length} 个）\n`);
+    // 这次载荷没给健康检查地址 → 只该有 relaunchMs（拉起耗时），
+    // 不该出现被误称为「停机时长」的 downtimeMs
+    assert.equal(report.portChecked, false);
+    assert.equal(typeof report.downtimeMs, 'undefined', '没体检端口就不该报 downtimeMs');
+    assert.ok(typeof report.relaunchMs === 'number' && report.relaunchMs >= 0, '应该有拉起耗时');
+    process.stdout.write(`       （新实例 ${relaunchedPid}；拉起耗时 ${(report.relaunchMs / 1000).toFixed(1)}s；killList ${report.killList.length} 个）\n`);
 
     process.stdout.write('4) cancel：撤销还没执行的排程\n');
     const app3 = spawn(process.execPath, [FIXTURE_APP, '--gen', '1'], {
@@ -357,6 +361,25 @@ await checkAsync('未知 action 的返回值里没有 undefined 字段', async (
   for (const [key, value] of Object.entries(out)) {
     assert.notEqual(value, undefined, `字段 ${key} 是 undefined`);
   }
+});
+
+// 真机第一次调用踩到的：cordis 对没 inject 的服务是「读一下就抛」
+await checkAsync('ctx.webServer 抛错时，工具只能失败、不能把异常抛出去', async () => {
+  const mod = await import('../lib/index.js');
+  const registered = [];
+  const ctx = {
+    tools: { register: (def) => { registered.push(def); return () => {}; } },
+    systemPrompt: { section: () => () => {} },
+    effect: () => () => {},
+  };
+  Object.defineProperty(ctx, 'webServer', {
+    get() { throw new Error('cannot get property "webServer" without inject'); },
+  });
+  mod.apply(ctx, { stateDir: join(tmpdir(), 'dsr-load-test-3'), announceToAgent: false });
+  const out = await registered[0].execute({ action: 'cancel' });
+  assert.equal(out.action, 'cancel');
+  assert.equal(typeof out.ok, 'boolean', '应该返回一个普通结果，而不是抛异常');
+  assert.equal(out.ok, false, '没有待执行排程时应该是一次干净的失败');
 });
 
 const failed = results.filter((row) => row.ok !== true);

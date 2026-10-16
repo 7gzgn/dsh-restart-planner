@@ -13,7 +13,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -159,6 +159,21 @@ check('路径落在 DSH_HOME 下', () => {
 });
 
 process.stdout.write('2) resolve：对着本进程体检\n');
+await checkAsync('helper.ps1 先过 PowerShell 自己的解析器（语法错别伪装成超时）', async () => {
+  if (!isWindows) return;
+  const script = [
+    '$tokens = $null; $errs = $null;',
+    `$null = [System.Management.Automation.Language.Parser]::ParseFile('${PS_HELPER.replace(/'/g, "''")}', [ref]$tokens, [ref]$errs);`,
+    'if ($errs -and $errs.Count -gt 0) { $errs | ForEach-Object { Write-Output ("line " + $_.Extent.StartLineNumber + ": " + $_.Message) }; exit 1 }',
+    "Write-Output 'parse ok'",
+  ].join(' ');
+  const out = await new Promise((resolve, reject) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf8', timeout: 30000, windowsHide: true },
+      (err, stdout) => (err ? reject(new Error(String(stdout || err.message))) : resolve(String(stdout))));
+  });
+  assert.match(out, /parse ok/, `helper.ps1 解析失败：${out}`);
+});
 await checkAsync('能找到「要杀谁」和「用什么命令拉回来」', async () => {
   const plan = await resolvePlan({
     stateDir: join(tmpdir(), 'dsr-probe'),

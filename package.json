@@ -1,0 +1,83 @@
+{
+  "name": "dsh-self-restart",
+  "version": "0.1.0",
+  "description": "Let the agent restart its own DSH host: schedule a self-restart, finish the turn first, then a detached helper stops and relaunches the app and reports what happened.",
+  "type": "module",
+  "main": "lib/index.js",
+  "bin": {
+    "dsh-self-restart": "bin/dsh-self-restart.mjs"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./plan": "./lib/plan.js",
+    "./core": "./lib/core.js",
+    "./helper.ps1": "./lib/helper.ps1",
+    "./helper.mjs": "./lib/helper.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "restart",
+    "self-restart",
+    "relaunch",
+    "reload",
+    "hot-reload",
+    "plugin-reload",
+    "agent-automation",
+    "process-control",
+    "watchdog",
+    "windows",
+    "重启",
+    "自动重启"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test/smoke.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/7gzgn/dsh-self-restart.git"
+  },
+  "homepage": "https://github.com/7gzgn/dsh-self-restart#readme",
+  "bugs": {
+    "url": "https://github.com/7gzgn/dsh-self-restart/issues"
+  },
+  "dsh": {
+    "compatibility": {
+      "dshReleases": {
+        "0.2.0-rc.2": "compatible"
+      }
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.4 <5.0.0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <0.3.0-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    }
+  }
+}

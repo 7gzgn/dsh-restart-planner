@@ -154,7 +154,15 @@ function Resolve-Plan {
         $plan.callerPid = $startPid
 
         $current = Get-ProcInfo -ProcessId $startPid
-        if ($null -eq $current) { throw "caller process $startPid is not running" }
+        if ($null -eq $current) {
+            # Deliberately NOT guessing here: picking a process off the machine-wide
+            # table could target somebody else's application. Fail loudly instead.
+            # (Handing the job over freezes the target first, so this only happens
+            # for hand-built payloads.)
+            $detail = "caller process $startPid is not running and the payload carries no targetPid"
+            $hint = 'pass --target-pid explicitly, or use the tool path where the host process outlives the request'
+            throw "$detail; $hint"
+        }
 
         $exe = [string]$current.ExecutablePath
         if ([string]::IsNullOrEmpty($exe)) { $exe = [string]$Payload.selfExe }
@@ -293,6 +301,17 @@ function Invoke-Arm {
     $lnkPath = Join-Path $stateDir "launch-$id.lnk"
 
     Remove-Item -LiteralPath $bootPath -Force -ErrorAction SilentlyContinue
+
+    # Freeze the target NOW, while the caller is still guaranteed to be alive.
+    # The arming process is often short-lived (the CLI exits as soon as arming
+    # returns), and the handed-over helper runs seconds later - if it had to walk
+    # the ancestor chain again at that point, the chain's first link would be gone.
+    $armed = Resolve-Plan -Payload $Payload
+    if ($null -eq $armed -or [int]$armed.targetPid -le 0) {
+        return [ordered]@{ ok = $false; action = 'arm'; id = $id; error = 'cannot resolve a restart target' }
+    }
+    $Payload | Add-Member -NotePropertyName targetPid -NotePropertyValue ([int]$armed.targetPid) -Force
+
     Write-JsonFile -Path $payloadPath -Object $Payload
 
     $helperPath = Get-HelperPath
@@ -309,6 +328,10 @@ function Invoke-Arm {
         payloadPath = $payloadPath
         helperPath = $helperPath
         stateDir = $stateDir
+        targetPid = [int]$armed.targetPid
+        targetName = [string]$armed.targetName
+        relaunchCommand = [string]$armed.relaunchCommand
+        resolution = [string]$armed.resolution
     }
 
     # --- route 1: let Explorer start it (outside the application's job object)

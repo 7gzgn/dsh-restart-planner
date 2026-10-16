@@ -1,0 +1,4 @@
+# dsh-self-restart bundle patch: 把插件行插进 profile 名单。
+- insert:
+    - id: plugin-self-restart
+      name: 'dsh-self-restart'

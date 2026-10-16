@@ -487,7 +487,17 @@ function Invoke-Restart {
     # 2b) re-read the process table right before the kill: anything spawned by the
     #     asking turn after the first look belongs to this application too.
     try {
-        $fresh = Resolve-Plan -Payload $Payload
+        $fresh = $null
+        try {
+            $fresh = Resolve-Plan -Payload $Payload
+        }
+        catch {
+            # The caller can be gone by now (a CLI process, for instance). Fall back
+            # to the target we already resolved rather than giving up on the refresh.
+            $refreshed = [pscustomobject]@{ targetPid = $plan.targetPid; selfExe = [string]$Payload.selfExe }
+            $fresh = Resolve-Plan -Payload $refreshed
+            Write-Log 'kill list refreshed by explicit target (the original caller had exited)'
+        }
         if ($null -ne $fresh.killList -and @($fresh.killList).Count -gt 0) {
             if (@($fresh.killList).Count -ne @($plan.killList).Count) {
                 Write-Log ("kill list refreshed: {0} -> {1} process(es)" -f @($plan.killList).Count, @($fresh.killList).Count)
@@ -583,15 +593,24 @@ function Invoke-Restart {
         }
     }
     $readyAt = Get-Date
-    $downtimeMs = [int]($readyAt - $killedAt).TotalMilliseconds
+    $elapsedMs = [int]($readyAt - $killedAt).TotalMilliseconds
     $finalState = 'ok'
     if ($port -gt 0 -and -not $healthy) { $finalState = 'started-but-unhealthy' }
-    Write-Report -State $finalState -Extra @{
+    $extra = @{
         readyAt = $readyAt.ToString('o')
         healthy = $healthy
-        downtimeMs = $downtimeMs
+        portChecked = ($port -gt 0)
     }
-    Write-Log ("done: state={0} newPid={1} healthy={2} downtimeMs={3}" -f $finalState, $newPid, $healthy, $downtimeMs)
+    if ($port -gt 0) {
+        # only a probed listener justifies the word "downtime"
+        $extra['downtimeMs'] = $elapsedMs
+    }
+    else {
+        $extra['relaunchMs'] = $elapsedMs
+        $extra['note'] = 'no health url: the listener was not probed, so this is launch latency, not downtime'
+    }
+    Write-Report -State $finalState -Extra $extra
+    Write-Log ("done: state={0} newPid={1} healthy={2} portChecked={3} elapsedMs={4}" -f $finalState, $newPid, $healthy, ($port -gt 0), $elapsedMs)
     Remove-Item -LiteralPath $bootPath -Force -ErrorAction SilentlyContinue
     return $script:report
 }

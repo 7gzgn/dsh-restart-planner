@@ -134,6 +134,17 @@ function Resolve-Plan {
         $plan.resolution = 'explicit-target'
     }
     else {
+        # --- 结构性防护：调用方必须**明确指认**目标，否则不猜 ---
+        # 祖先解析（ancestor-walk）在测试/实验环境里会把"应用顶层"解析成**真正的宿主**：
+        # 2026-10-16 实测，一次手工探测（payload 只带 stateDir）就是这样把用户的应用
+        # 重启掉的。生产路径每次都会给（工具层给 callerPid；CLI 在 arm 时冻结 targetPid），
+        # 所以这里拒绝的只可能是测试/手搓的 payload。
+        $hasTarget = ($null -ne $Payload.targetPid) -and ([int]$Payload.targetPid -gt 0)
+        $hasCaller = ($null -ne $Payload.callerPid) -and ([int]$Payload.callerPid -gt 0)
+        if ((-not $hasTarget) -and (-not $hasCaller)) {
+            throw 'refused: the payload names neither targetPid nor callerPid, so the goal would be guessed by an ancestor walk. A test or hand-built payload must name its target explicitly.'
+        }
+
         $callerPid = 0
         if ($null -ne $Payload.callerPid) { $callerPid = [int]$Payload.callerPid }
         if ($callerPid -le 0) { $callerPid = $PID }
@@ -645,6 +656,27 @@ try {
     # leaving it around would only clutter the state directory
     if (-not [string]::IsNullOrEmpty($PayloadFile)) {
         Remove-Item -LiteralPath $PayloadFile -Force -ErrorAction SilentlyContinue
+    }
+
+    # --- safety gate: never move a process unless the caller explicitly allowed a
+    # real restart. A thrown-away helper (test suite, experiment) must refuse
+    # BEFORE touching anything. Why: on 2026-10-16 a test run aimed the helper at
+    # the live host and the user's app restarted four times. 'resolve' is read-only
+    # and stays allowed.
+    #
+    # The flag is a FILE in the state directory, not an environment variable:
+    # the arm hand-off goes through Explorer + a generated .lnk, and that hop
+    # does not carry the caller's environment.
+    if (($Action -eq 'arm') -or ($Action -eq 'run')) {
+        $allowFile = Join-Path ([string]$payload.stateDir) '.allow-real-restart'
+        if (-not (Test-Path -LiteralPath $allowFile)) {
+            Emit ([ordered]@{
+                ok    = $false
+                action = $Action
+                error = 'refused: real restart requires an explicit allow marker (.allow-real-restart in the state dir); a thrown-away helper must not move the live host'
+            })
+            exit 0
+        }
     }
 
     if ($Action -eq 'resolve') {

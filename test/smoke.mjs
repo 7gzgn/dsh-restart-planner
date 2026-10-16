@@ -295,6 +295,60 @@ if (isWindows) {
   process.stdout.write('3) 跳过真刀真枪（非 Windows：helper.mjs 未在真机上验证）\n');
 }
 
+process.stdout.write('6) 插件装载：拿一个假 ctx 真的 apply 一次\n');
+await checkAsync('apply() 能注册工具、挂公告段、并正常卸载', async () => {
+  const mod = await import('../lib/index.js');
+  assert.equal(mod.name, 'dsh-self-restart');
+  assert.deepEqual(mod.inject, ['tools', 'systemPrompt']);
+
+  const registered = [];
+  const sections = [];
+  const effects = [];
+  const fakeCtx = {
+    tools: { register: (def) => { registered.push(def); return () => {}; } },
+    systemPrompt: { section: (s) => { sections.push(s); return () => {}; } },
+    effect: (fn, label) => { effects.push({ fn, label }); return () => {}; },
+  };
+  mod.apply(fakeCtx, { stateDir: join(tmpdir(), 'dsr-load-test') });
+
+  assert.equal(registered.length, 1, '应该注册一个工具');
+  assert.equal(registered[0].name, 'self_restart');
+  assert.ok(Array.isArray(registered[0].parameters) === false, 'parameters 应该是对象');
+  assert.ok(typeof registered[0].execute === 'function');
+  assert.ok(typeof registered[0].output.render === 'function');
+  assert.equal(sections.length, 1, '应该挂一段公告');
+  assert.match(sections[0].text, /dsh-self-restart/);
+  assert.equal(effects.length, 1, '应该有 teardown effect');
+
+  // 未知 action 必须变成普通错误结果，而不是抛出去
+  const bad = await registered[0].execute({ action: 'nope' });
+  assert.equal(bad.ok, false);
+  assert.match(String(bad.error), /unknown action/);
+
+  // 渲染函数不该崩：三种 action 各过一遍
+  for (const action of ['schedule', 'status', 'cancel']) {
+    const rendered = registered[0].output.render({}, { ok: true, action, data: {} });
+    assert.ok(Array.isArray(rendered) && typeof rendered[0].text === 'string' && rendered[0].text !== '');
+  }
+  const failed = registered[0].output.render({}, { ok: false, action: 'schedule', error: 'boom' });
+  assert.match(failed[0].text, /boom/);
+});
+
+// 工具返回值里不允许出现 undefined（宿主是 lossless-JSON 校验）
+await checkAsync('未知 action 的返回值里没有 undefined 字段', async () => {
+  const mod = await import('../lib/index.js');
+  const registered = [];
+  mod.apply({
+    tools: { register: (def) => { registered.push(def); return () => {}; } },
+    systemPrompt: { section: () => () => {} },
+    effect: () => () => {},
+  }, { stateDir: join(tmpdir(), 'dsr-load-test-2'), announceToAgent: false });
+  const out = await registered[0].execute({ action: 'zzz' });
+  for (const [key, value] of Object.entries(out)) {
+    assert.notEqual(value, undefined, `字段 ${key} 是 undefined`);
+  }
+});
+
 const failed = results.filter((row) => row.ok !== true);
 process.stdout.write(`\n${results.length - failed.length}/${results.length} 通过\n`);
 if (failed.length > 0) {

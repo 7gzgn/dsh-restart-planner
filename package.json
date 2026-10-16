@@ -1,6 +1,6 @@
 {
   "name": "dsh-self-restart",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Let the agent restart its own DSH host: schedule a self-restart, finish the turn first, then a detached helper stops and relaunches the app and reports what happened.",
   "type": "module",
   "main": "lib/index.js",

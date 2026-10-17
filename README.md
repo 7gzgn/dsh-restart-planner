@@ -75,6 +75,28 @@ self_restart({ action: "cancel" })     // 撤掉还没执行的那次
 | `confirm` | `false` | **先问用户什么时候可以重启**，再按选择排程（见下节） |
 | `confirmFallback` | `ask-later` | `confirm` 没人应答时怎么办：`ask-later`（再等 30 秒）/ `cancel` / `now` |
 | `confirmTimeoutMs` | `90000` | 等回答的上限；超时按 `confirmFallback` 走，**不会无限等** |
+| `resume` | `true` | 重启后**自动往这个会话投一条「继续」**（v0.4.0） |
+| `continuePrompt` | 默认一句 | 那条「继续」说什么（想接得准就自己写） |
+
+### 重启后自动继续（v0.4.0）
+
+重启本身会让当前这一轮**断在半路**。重启回来之后的"接着干"，以前只能靠人再说一句。
+
+现在：排程重启时会记下**当前会话 id**（`$DSH_HOME/dsh-restart-planner/resume.json`），
+新进程起来后由插件用它自己那条 prompt 通道，把一句「继续」投回那个会话：
+
+```js
+ctx.sessionController.prompt({ requestId, sessionId, mode: 'queue', content: [{ type: 'text', text }] })
+```
+
+三条设计：
+
+- **投递成功才删标记**：失败就留着，下次启动还能再试 —— 不会被一次抖动吞掉；
+- **排队（`queue`）而不是插话（`steer`）**：不抢正在跑的那一轮；
+- `resume: false` 就纯重启、不自动继续；`resumeAfterRestart: false` 可全局关掉。
+
+> 为什么不用 `agent.followup`：那是同类别家插件在 0.1.x 上的入口，**0.2.x 的 Agent 只剩 `{ id }`**，
+> 没有 followup 了。上面那条才是现在的正门。
 
 ### 重启也叫眨眼：先问一句再动手
 

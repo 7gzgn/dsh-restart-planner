@@ -1,6 +1,6 @@
 {
   "name": "dsh-restart-planner",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Let the agent restart its own DSH host: schedule a self-restart, finish the turn first, then a detached helper stops and relaunches the app and reports what happened. v0.4.0 adds auto-continue: after the new process boots, a marker makes it deliver one 'keep going' prompt back into the interrupted session through sessionController.prompt (marker is only cleared after the prompt is accepted).",
   "type": "module",
   "main": "lib/index.js",

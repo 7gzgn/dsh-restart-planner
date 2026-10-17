@@ -1,11 +1,11 @@
 {
-  "name": "dsh-self-restart",
-  "version": "0.2.1",
-  "description": "Let the agent restart its own DSH host: schedule a self-restart, finish the turn first, then a detached helper stops and relaunches the app and reports what happened.",
+  "name": "dsh-restart-planner",
+  "version": "0.3.0",
+  "description": "Let the agent restart its own DSH host: schedule a self-restart, finish the turn first, then a detached helper stops and relaunches the app and reports what happened. (Renamed from dsh-self-restart to avoid colliding with an unrelated npm package of that name.)",
   "type": "module",
   "main": "lib/index.js",
   "bin": {
-    "dsh-self-restart": "bin/dsh-self-restart.mjs"
+    "dsh-restart-planner": "bin/dsh-restart-planner.mjs"
   },
   "exports": {
     ".": "./lib/index.js",
@@ -51,11 +51,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/7gzgn/dsh-self-restart.git"
+    "url": "git+https://github.com/7gzgn/dsh-restart-planner.git"
   },
-  "homepage": "https://github.com/7gzgn/dsh-self-restart#readme",
+  "homepage": "https://github.com/7gzgn/dsh-restart-planner#readme",
   "bugs": {
-    "url": "https://github.com/7gzgn/dsh-self-restart/issues"
+    "url": "https://github.com/7gzgn/dsh-restart-planner/issues"
   },
   "dsh": {
     "compatibility": {

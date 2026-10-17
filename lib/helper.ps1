@@ -1,4 +1,4 @@
-# dsh-self-restart - Windows helper
+# dsh-restart-planner - Windows helper
 #
 # Three actions, one protocol (a JSON payload in, one compressed JSON line out):
 #

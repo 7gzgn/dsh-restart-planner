@@ -1,4 +1,4 @@
-# dsh-self-restart
+# dsh-restart-planner
 
 > 让 **agent 自己**安排一次 DSH 重启：先把这一轮说完，再由一个**活过这次重启**的 helper 停掉宿主、原地拉起、体检、留下报告。
 
@@ -95,11 +95,11 @@ self_restart({ action: "schedule", confirm: true, reason: "装完插件要重载
 ### 不带工具也能用（CLI）
 
 ```bash
-dsh-self-restart status                 # 体检 + 上次报告
-dsh-self-restart resolve                # 只算：会结束谁、用什么命令拉回来
-dsh-self-restart schedule --reason "改完代码" --delay 20
-dsh-self-restart schedule --dry-run     # 先看看要动什么
-dsh-self-restart cancel
+dsh-restart-planner status                 # 体检 + 上次报告
+dsh-restart-planner resolve                # 只算：会结束谁、用什么命令拉回来
+dsh-restart-planner schedule --reason "改完代码" --delay 20
+dsh-restart-planner schedule --dry-run     # 先看看要动什么
+dsh-restart-planner cancel
 ```
 
 从 DSH 自己的终端里跑时，它会顺着父进程认出宿主；从无关终端里跑、或宿主形态特殊时，用
@@ -131,7 +131,7 @@ dsh-self-restart cancel
 
 ## 重启之后你拿到什么
 
-`~/.dsh/dsh-self-restart/last.json`（`self_restart status` 会渲染成人话）：
+`~/.dsh/dsh-restart-planner/last.json`（`self_restart status` 会渲染成人话）：
 
 ```jsonc
 {
@@ -147,7 +147,7 @@ dsh-self-restart cancel
 ```
 
 插件**平时一句话都不说**；只有在"本进程刚刚被它重启过"的 10 分钟内，
-才会在系统提示里补一句 `⚠ 本进程刚刚由 dsh-self-restart 重启过`，提醒 agent 去核对结果并汇报。
+才会在系统提示里补一句 `⚠ 本进程刚刚由 dsh-restart-planner 重启过`，提醒 agent 去核对结果并汇报。
 —— **安静是常态，刚重启完是个例外。**
 
 ## 兼容性

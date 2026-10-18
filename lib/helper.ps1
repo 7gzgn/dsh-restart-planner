@@ -356,7 +356,7 @@ function Invoke-Arm {
             $link.TargetPath = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
             $link.Arguments = $arguments
             $link.WorkingDirectory = $stateDir
-            $link.WindowStyle = 1
+            $link.WindowStyle = 7
             $link.Save()
             Start-Process -FilePath 'explorer.exe' -ArgumentList $lnkPath | Out-Null
             $deadline = (Get-Date).AddSeconds($waitSeconds)
@@ -592,25 +592,53 @@ function Invoke-Restart {
 
     # 5) relaunch. The helper was started by Explorer, so the new application is
     #    outside the old job object and shows up on the interactive desktop.
+    #    The host is launched through Explorer as well (a .lnk with arguments):
+    #    this helper runs inside a Windows Terminal job with kill-on-close, so a
+    #    plain child of this process would die together with that console window.
     $exe = $plan.targetExe
     $argString = Split-CommandLine -CommandLine $plan.relaunchCommand
     if ([string]::IsNullOrEmpty($exe)) { throw 'no executable to relaunch' }
     Write-Log ("relaunching {0} {1}" -f $exe, $argString)
     $started = $null
+    $launchAppLnk = Join-Path $stateDir "app-$id.lnk"
+    $beforeLaunch = Get-Date
     try {
-        $startArgs = @{
-            FilePath = $exe
-            WorkingDirectory = $plan.workingDirectory
-            PassThru = $true
+        $shellApp = New-Object -ComObject WScript.Shell
+        $appLink = $shellApp.CreateShortcut($launchAppLnk)
+        $appLink.TargetPath = $exe
+        if (-not [string]::IsNullOrEmpty($argString)) { $appLink.Arguments = $argString }
+        if (-not [string]::IsNullOrEmpty([string]$plan.workingDirectory)) { $appLink.WorkingDirectory = [string]$plan.workingDirectory }
+        $appLink.WindowStyle = 1
+        $appLink.Save()
+        Start-Process -FilePath 'explorer.exe' -ArgumentList $launchAppLnk | Out-Null
+        $findDeadline = (Get-Date).AddSeconds(30)
+        while ((Get-Date) -lt $findDeadline) {
+            $cand = Get-Process -ErrorAction SilentlyContinue | Where-Object {
+                try { $_.Path -eq $exe -and $_.StartTime -gt $beforeLaunch } catch { $false }
+            } | Select-Object -First 1
+            if ($null -ne $cand) { $started = $cand; break }
+            Start-Sleep -Milliseconds 300
         }
-        if (-not [string]::IsNullOrEmpty($argString)) { $startArgs['ArgumentList'] = $argString }
-        $started = Start-Process @startArgs
+        if ($null -eq $started) { throw 'explorer relaunch did not surface a new process within 30s' }
     }
     catch {
-        Write-Report -State 'relaunch-failed' -Extra @{ error = $_.Exception.Message; relaunchCommand = $plan.relaunchCommand }
-        Write-Log ("relaunch failed: {0}" -f $_.Exception.Message)
-        return $script:report
+        Write-Log ("explorer relaunch failed, falling back to Start-Process: {0}" -f $_.Exception.Message)
+        try {
+            $startArgs = @{
+                FilePath = $exe
+                WorkingDirectory = $plan.workingDirectory
+                PassThru = $true
+            }
+            if (-not [string]::IsNullOrEmpty($argString)) { $startArgs['ArgumentList'] = $argString }
+            $started = Start-Process @startArgs
+        }
+        catch {
+            Write-Report -State 'relaunch-failed' -Extra @{ error = $_.Exception.Message; relaunchCommand = $plan.relaunchCommand }
+            Write-Log ("relaunch failed: {0}" -f $_.Exception.Message)
+            return $script:report
+        }
     }
+    Remove-Item -LiteralPath $launchAppLnk -Force -ErrorAction SilentlyContinue
     $newPid = 0
     if ($null -ne $started) { $newPid = [int]$started.Id }
     Write-Report -State 'relaunched' -Extra @{ relaunchedAt = (Get-Date).ToString('o'); newPid = $newPid }

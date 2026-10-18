@@ -115,6 +115,8 @@ self_restart({ action: "schedule", confirm: true, reason: "装完插件要重载
 
 默认**不询问**（保持全自动，适合无人值守）。需要问的时候才传 `confirm: true`。
 
+> **依赖**：这个框靠宿主的 `user-questions` 服务弹出来（`@deepseek-ai/dsh-base` 自带）。插件在 `inject` 里声明了它，并同时用 `ctx.get('userQuestions')` 兜底；万一宿主确实没有这个服务，`confirm` 不会弹框，结果里会**明确写 `no-asker` 并说明按哪个 fallback 走的**——不会假装问过你。（v0.4.5 修：此前这一段会静默退回兜底，用户完全看不出框没弹。）
+
 ### 不带工具也能用（CLI）
 
 ```bash

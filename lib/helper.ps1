@@ -481,8 +481,10 @@ function Invoke-Restart {
     $delay = [int]$Payload.delaySeconds
     if ($delay -lt 0) { $delay = 0 }
     $delayDeadline = (Get-Date).AddSeconds($delay)
+    $lastBeat = Get-Date
     while ((Get-Date) -lt $delayDeadline) {
         if (Is-Canceled) { Write-Report -State 'canceled' -Extra @{}; Write-Log 'canceled during delay'; return  }
+        if (((Get-Date) - $lastBeat).TotalSeconds -ge 10) { Write-Log ("heartbeat: delay, {0}s left" -f [int]($delayDeadline - (Get-Date)).TotalSeconds); $lastBeat = Get-Date }
         Start-Sleep -Milliseconds 400
     }
 
@@ -494,9 +496,12 @@ function Invoke-Restart {
     $hardCap = (Get-Date).AddSeconds($maxWait)
     $sessionRoot = [string]$Payload.sessionRoot
     $idleMs = $null
+    $lastBeat = Get-Date
     while ((Get-Date) -lt $hardCap) {
         if (Is-Canceled) { Write-Report -State 'canceled' -Extra @{}; Write-Log 'canceled while waiting for quiet'; return $script:report }
-        $target = Get-ProcInfo -ProcessId $plan.targetPid
+        # Get-Process instead of a WMI query: a blocked CIM call hangs the whole
+        # wait loop with no log line, which looks exactly like "waiting forever".
+        $target = Get-Process -Id $plan.targetPid -ErrorAction SilentlyContinue
         if ($null -eq $target) {
             Write-Report -State 'exited-early' -Extra @{ note = 'the application exited on its own before the restart; relaunch skipped' }
             Write-Log 'target exited before we stopped it; not relaunching'
@@ -506,6 +511,7 @@ function Invoke-Restart {
         if ($null -eq $newest) { break }
         $idle = ((Get-Date) - $newest).TotalMilliseconds
         if ($idle -ge ($quiet * 1000)) { $idleMs = [int]$idle; break }
+        if (((Get-Date) - $lastBeat).TotalSeconds -ge 10) { Write-Log ("heartbeat: quiet wait, idle={0}ms, cap in {1}s" -f [int]$idle, [int]($hardCap - (Get-Date)).TotalSeconds); $lastBeat = Get-Date }
         Start-Sleep -Milliseconds 500
     }
     Write-Report -State 'quiet-reached' -Extra @{ idleMs = $idleMs }
